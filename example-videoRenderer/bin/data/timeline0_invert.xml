@@ -19,6 +19,12 @@
     </key>
     <key>
         <switchName />
+        <max>00:00:05:556</max>
+        <time>00:00:05:400</time>
+        <value>0.003000000</value>
+    </key>
+    <key>
+        <switchName />
         <max>00:00:06:937</max>
         <time>00:00:05:904</time>
         <value>0.750000000</value>

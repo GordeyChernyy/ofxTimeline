@@ -95,7 +95,8 @@ class ofxTimeline : ofThread {
 	virtual ~ofxTimeline();
 
 	virtual void setup();
-	
+    virtual void setup(string firstPageName);///twk
+    
 	//Optionally run ofxTimeline on the background thread
 	//this isn't necessary most of the time but
 	//for precise timing apps and input recording it'll greatly
@@ -140,7 +141,7 @@ class ofxTimeline : ofThread {
     virtual void show();
 	virtual void hide();
 	virtual bool getIsShowing();
-	virtual void draw();
+	virtual void draw(bool drawTickerMarks=true); //tikerMarks consumes a lot of resources
     
 	virtual void mousePressed(ofMouseEventArgs& args);
 	virtual void mouseMoved(ofMouseEventArgs& args);
@@ -156,6 +157,9 @@ class ofxTimeline : ofThread {
     virtual void setShowTicker(bool shouldShowTicker);
     virtual void setShowInoutControl(bool shouldShowInoutControl);
     virtual void setShowZoomer(bool shouldShowZoomer);
+    
+    virtual void setShowPageTabs(bool shouldShowPageTabs){showPageTabs = shouldShowPageTabs;}
+    virtual bool getIsShowingPageTabs(){return showPageTabs;}
 
     //sets where to save all timeline-related meta data xml files
     virtual void setWorkingFolder(string folderPath);
@@ -280,6 +284,8 @@ class ofxTimeline : ofThread {
 	//this is useful for snapping to intervals
 	void setBPM(float bpm);
 	float getBPM();
+    
+    void setNewBPM(float bpm);
 	
     bool toggleSnapToBPM();
     void enableSnapToBPM(bool enableSnap);
@@ -443,6 +449,8 @@ class ofxTimeline : ofThread {
 	ofxTimecode& getTimecode();
 	ofxMSATimer& getTimer();
 	ofxTLZoomer* getZoomer();
+    
+    ofxTLTicker* getTicker();// LeoZ addition
 	
 	vector<ofxTLPage*>& getPages();
     
@@ -484,6 +492,8 @@ class ofxTimeline : ofThread {
     float normalizedXtoScreenX(float x, ofRange inputRange);    
     
     virtual ofxTLEvents& events();
+    
+    void resetInOutTrack();///twk.
     
 	//binary test hack
 	bool curvesUseBinary;
@@ -578,6 +588,7 @@ class ofxTimeline : ofThread {
     bool showTicker; 
     bool showInoutControl; 
     bool showZoomer;
+    bool showPageTabs; // LeoZ addition
     
     ofxXmlSettings settings;
 	string name;

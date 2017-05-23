@@ -54,6 +54,7 @@ ofOpenALSoundPlayer_TimelineAdditions::ofOpenALSoundPlayer_TimelineAdditions(){
 	mp3streamf		= 0;
 #endif
 	players.insert(this);
+    
 }
 
 // ----------------------------------------------------------------------------
@@ -278,7 +279,7 @@ bool ofOpenALSoundPlayer_TimelineAdditions::sfStream(string path,vector<short> &
 			fftAuxBuffer[i]=float(buffer[i])/32565.0f;
 		}
 	}
-
+    
 	return true;
 }
 
@@ -373,6 +374,8 @@ void ofOpenALSoundPlayer_TimelineAdditions::readFile(string fileName, vector<sho
 			fftBuffers[i][j] = fftAuxBuffer[j*channels+i];
 		}
 	}
+    
+    
 }
 
 //------------------------------------------------------------
@@ -501,9 +504,22 @@ bool ofOpenALSoundPlayer_TimelineAdditions::load(string fileName, bool is_stream
 			alSourcei (sources[i], AL_SOURCE_RELATIVE, AL_TRUE);
 		}
 	}
+    
+    
+    //soundBuffer stuff---------------------
+    currentSoundBuffer.setNumChannels(channels);
+    currentSoundBuffer.setSampleRate(samplerate);
+    currentSoundBuffer.clear();
+    channelSoundBuffer.setNumChannels(1);
+    channelSoundBuffer.setSampleRate(samplerate);
+    channelSoundBuffer.clear();
+    //--------------------------------------
+    
 	ofLogVerbose("ofOpenALSoundPlayer_TimelineAdditions: successfully loaded " + fileName);
 	bLoadedOk = true;
 	return true;
+    
+    
 }
 
 //------------------------------------------------------------
@@ -636,6 +652,10 @@ float ofOpenALSoundPlayer_TimelineAdditions::getDuration() const{
 
 int ofOpenALSoundPlayer_TimelineAdditions::getNumChannels() const{
 	return channels;
+}
+
+int ofOpenALSoundPlayer_TimelineAdditions::getSampleRate() const{
+    return samplerate;
 }
 
 //------------------------------------------------------------
@@ -872,7 +892,7 @@ void ofOpenALSoundPlayer_TimelineAdditions::initSystemFFT(int bands){
 	systemBins.resize(bands);
 	createWindow(signalSize);
 }
-
+// ----------------------------------------------------------------------------
 float * ofOpenALSoundPlayer_TimelineAdditions::getCurrentBufferSum(int size){
 	if(int(windowedSignal.size())!=size){
 		windowedSignal.resize(size);
@@ -900,7 +920,7 @@ float * ofOpenALSoundPlayer_TimelineAdditions::getCurrentBufferSum(int size){
 	}
 	return &windowedSignal[0];
 }
-
+// ----------------------------------------------------------------------------
 vector<float>& ofOpenALSoundPlayer_TimelineAdditions::getCurrentBuffer(int _size)
 {
 	if(int(currentBuffer.size()) != _size)
@@ -930,6 +950,172 @@ vector<float>& ofOpenALSoundPlayer_TimelineAdditions::getCurrentBuffer(int _size
     }
     return currentBuffer;
 }
+// ----------------------------------------------------------------------------
+vector<float>& ofOpenALSoundPlayer_TimelineAdditions::getBufferForChannelForFrame(int _frame, float _fps, int _size, int channel){
+
+    ///bufferForFrame------------------------------------
+    
+    if(int(currentBuffer.size()) != _size)
+    {
+        currentBuffer.resize(_size);
+    }
+   	currentBuffer.assign(currentBuffer.size(),0);
+    
+    //ok--------------------------------------
+    
+    int nCh= channel; //channels number starting from 0
+    if (nCh >= channels){
+        nCh = channels - 1;//limit to file nChannels
+        ofLog(OF_LOG_WARNING,"ofOpenALSoundPlayer_TimelineAdditions: channel requested exceeds file channels");
+    }
+    
+    //ok--------------------------------------
+    
+    int pos = _frame*float(samplerate)/_fps;
+    for(int k = 0; k < int(sources.size())/channels; ++k)
+    {
+        ///for(int i = 0; i < channels; ++i) ///avoid channels sumup
+        int i = nCh; //use only specified channel
+        {
+            for(int j = 0; j < _size; ++j)
+            {
+                if(pos+j<(int)buffer.size())
+                {
+                    currentBuffer[j] += float(buffer[(pos+j)*channels+i])/65534.0f;
+                }
+                else
+                {
+                    currentBuffer[j] = 0;
+                }
+            }
+        }
+    }
+    return currentBuffer;
+
+    
+    
+    
+}
+// ----------------------------------------------------------------------------
+//for AudioAnalyzerTrack
+vector<float>& ofOpenALSoundPlayer_TimelineAdditions::getCurrentBufferForChannel(int _size, int channel){
+    
+    if(int(currentBuffer.size()) != _size)
+    {
+        currentBuffer.resize(_size);
+    }
+   	currentBuffer.assign(currentBuffer.size(),0);
+    
+    int nCh= channel; //channels number starting from 0
+    if (nCh >= channels){
+        nCh = channels - 1;//limit to file nChannels
+        ofLog(OF_LOG_WARNING,"ofOpenALSoundPlayer_TimelineAdditions: channel requested exceeds file channels");
+    }
+    
+    int pos;
+    for(int k = 0; k < int(sources.size())/channels; ++k)
+    {
+        alGetSourcei(sources[k*channels],AL_SAMPLE_OFFSET,&pos);
+        ///for(int i = 0; i < channels; ++i) ///avoid channels sumup
+        int i = nCh; //use only specified channel
+        {
+            for(int j = 0; j < _size; ++j)
+            {
+                if(pos+j<(int)buffer.size())
+                {
+                    currentBuffer[j] += float(buffer[(pos+j)*channels+i])/65534.0f;
+                }
+                else
+                {
+                    currentBuffer[j] = 0;
+                }
+            }
+        }
+    }
+    return currentBuffer;
+}
+
+
+//-----------------------------------------------------------
+ofSoundBuffer& ofOpenALSoundPlayer_TimelineAdditions::getCurrentSoundBuffer(int _size){
+    
+    if(currentSoundBuffer.getNumChannels()!= channels){
+        ofLogError()<<"Sound Player: currentSoundBuffer incorrect NumChannels";
+        return;
+    }
+    if(currentSoundBuffer.getSampleRate()!= samplerate){
+        ofLogError()<<"Sound Player: currentSoundBuffer incorrect Sample Rate";
+        return;
+    }
+    if(channelSoundBuffer.getSampleRate()!= samplerate){
+        ofLogError()<<"Sound Player: channelSoundBuffer incorrect Sample Rate";
+        return;
+    }
+    
+    
+    for (int i=0; i<channels; i++){
+        channelSoundBuffer.copyFrom( getCurrentBufferForChannel(_size, i), 1, samplerate);
+        currentSoundBuffer.setChannel(channelSoundBuffer, i);
+    }
+    
+    return currentSoundBuffer;
+    
+}
+//-----------------------------------------------------------
+ofSoundBuffer& ofOpenALSoundPlayer_TimelineAdditions::getCurrentSoundBufferMono(int _size){
+    
+
+    if(channelSoundBuffer.getSampleRate()!= samplerate){
+        ofLogError()<<"Sound Player: channelSoundBuffer incorrect Sample Rate";
+        return;
+    }
+
+    channelSoundBuffer.copyFrom( getCurrentBuffer(_size), 1, samplerate);
+
+    return channelSoundBuffer;
+    
+}
+//-----------------------------------------------------------
+ofSoundBuffer& ofOpenALSoundPlayer_TimelineAdditions::getSoundBufferForFrame(int _frame, float _fps, int _size){
+    
+    if(currentSoundBuffer.getNumChannels()!= channels){
+        ofLogError()<<"Sound Player: currentSoundBuffer incorrect NumChannels";
+        return;
+    }
+    if(currentSoundBuffer.getSampleRate()!= samplerate){
+        ofLogError()<<"Sound Player: currentSoundBuffer incorrect Sample Rate";
+        return;
+    }
+    if(channelSoundBuffer.getSampleRate()!= samplerate){
+        ofLogError()<<"Sound Player: channelSoundBuffer incorrect Sample Rate";
+        return;
+    }
+    
+    //---------------------------------------------
+    
+    for (int i=0; i<channels; i++){
+        channelSoundBuffer.copyFrom( getBufferForChannelForFrame(_frame, _fps, _size, i), 1, samplerate);
+        currentSoundBuffer.setChannel(channelSoundBuffer, i);
+    }
+    
+    return currentSoundBuffer;
+    
+    
+}
+//-----------------------------------------------------------
+ofSoundBuffer& ofOpenALSoundPlayer_TimelineAdditions::getSoundBufferMonoForFrame(int _frame, float _fps, int _size){
+    
+    if(channelSoundBuffer.getSampleRate()!= samplerate){
+        ofLogError()<<"Sound Player: channelSoundBuffer incorrect Sample Rate";
+        return;
+    }
+    
+    channelSoundBuffer.copyFrom( getBufferForFrame(_frame, _fps, _size), 1, samplerate);
+    
+    return channelSoundBuffer;
+    
+}
+//-----------------------------------------------------------
 
 vector<float>& ofOpenALSoundPlayer_TimelineAdditions::getBufferForFrame(int _frame, float _fps, int _size)
 {
@@ -1095,3 +1281,5 @@ void ofOpenALSoundPlayer_TimelineAdditions::runWindow(vector<float> & signal){
 }
 
 //#endif
+
+// ----------------------------------------------------------------------------

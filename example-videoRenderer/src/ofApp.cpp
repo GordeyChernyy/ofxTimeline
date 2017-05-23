@@ -24,6 +24,7 @@ void ofApp::setup(){
 	timeline.setLoopType(OF_LOOP_NORMAL);
     
     //add keyframes for  our shader
+//    timeline.add
 	timeline.addCurves("brightness", ofRange(0.0, 2.0), 1.0);
     timeline.addCurves("contrast", ofRange(.5, 2.0), 1.0);
     timeline.addCurves("saturation", ofRange(0.0, 1.5), 1.0);
@@ -200,6 +201,12 @@ void ofApp::keyPressed(int key){
     if(key == 'c'){
         //reload shader
         colorControl.load("colorcontrol");
+    }
+    if(key == 'f'){
+        timeline.getVideoPlayer("Video")->nextFrame();
+    }
+    if(key == 'd'){
+        timeline.getVideoPlayer("Video")->previousFrame();
     }
 }
 

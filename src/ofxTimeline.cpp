@@ -43,10 +43,17 @@ bool headersort(ofxTLTrackHeader* a, ofxTLTrackHeader* b){
 	return a->getDrawRect().y < b->getDrawRect().y;
 }
 
-#define TAB_HEIGHT 18
-#define TICKER_HEIGHT 27
-#define ZOOMER_HEIGHT 14
-#define INOUT_HEIGHT 7
+#define TAB_HEIGHT 1//18(-17)
+#define TICKER_HEIGHT 20//27 (-7)
+#define ZOOMER_HEIGHT 21//14(+7)
+#define INOUT_HEIGHT 19//7(+12)
+
+
+/*
+ see
+ #define FOOTER_HEIGHT in ofxTLTrackHeader.h (+8)
+ 
+ */
 
 ofxTimeline::ofxTimeline()
 :	width(1024),
@@ -93,7 +100,8 @@ ofxTimeline::ofxTimeline()
 	//TODO: should be able to use bitmap font if need be
 	fontPath("GUI/NewMedia Fett.ttf"),
 	fontSize(9),
-	footersHidden(false)
+	footersHidden(false),
+    showPageTabs(true)
 {
 }
 
@@ -167,13 +175,67 @@ void ofxTimeline::setup(){
 
 	if(name == ""){
 	    setName("timeline" + ofToString(timelineNumber++));
-	}
+    }
 	setupStandardElements();
 
 }
+///Same function as setup, but not using "Page One" as default name
+void ofxTimeline::setup(string firstPageName){
+    isSetup = true;
+    
+    width = ofGetWidth();
+    
+    if(tabs != NULL){
+        delete tabs;
+    }
+    tabs = new ofxTLPageTabs();
+    tabs->setTimeline(this);
+    tabs->setup();
+    tabs->setDrawRect(ofRectangle(offset.x, offset.y, width, TAB_HEIGHT));
+    
+    if(inoutTrack != NULL){
+        delete inoutTrack;
+    }
+    inoutTrack = new ofxTLInOut();
+    inoutTrack->setTimeline(this);
+    inoutTrack->setDrawRect(ofRectangle(offset.x, tabs->getBottomEdge(), width, INOUT_HEIGHT));
+    
+    if(ticker != NULL){
+        delete ticker;
+    }
+    ticker = new ofxTLTicker();
+    ticker->setTimeline(this);
+    
+    //TODO: save ticker playhead position
+    ticker->setup();
+    ticker->setDrawRect(ofRectangle(offset.x, inoutTrack->getBottomEdge(), width, TICKER_HEIGHT));
+    if(zoomer != NULL){
+        delete zoomer;
+    }
+    zoomer = new ofxTLZoomer();
+    zoomer->setTimeline(this);
+    zoomer->setDrawRect(ofRectangle(offset.y, ticker->getBottomEdge(), width, ZOOMER_HEIGHT));
+    
+    colors.load();
+    
+    enable();
+    
+    ofAddListener(timelineEvents.viewWasResized, this, &ofxTimeline::viewWasResized);
+    ofAddListener(timelineEvents.pageChanged, this, &ofxTimeline::pageChanged);
+    ofAddListener(ofEvents().update, this, &ofxTimeline::update);
+    
+    //You can change this name by calling setPageName()
+    addPage(firstPageName, true);///twk
+    
+    if(name == ""){
+        //setName("timeline" + ofToString(timelineNumber++));
+         setName("tl");
+    }
+    setupStandardElements();
+}
 
 void ofxTimeline::moveToThread(){
-	if(!isOnThread){
+    if(!isOnThread){
 		stop();
 		isOnThread = true;
 		ofRemoveListener(ofEvents().update, this, &ofxTimeline::update);
@@ -211,6 +273,10 @@ void ofxTimeline::setName(string newName){
 			}
 		}
     }
+}
+
+void ofxTimeline::resetInOutTrack(){
+    inoutTrack->load();
 }
 
 void ofxTimeline::setupStandardElements(){
@@ -531,7 +597,7 @@ void ofxTimeline::play(){
         if(isDone()){
             setPercentComplete(0.0);
         }
-
+        
 		isPlaying = true;
         currentTime = ofClamp(currentTime, getInTimeInSeconds(), getOutTimeInSeconds());
         playbackStartTime = timer.getAppTimeSeconds() - currentTime;
@@ -874,8 +940,11 @@ void ofxTimeline::reset(){ //gets rid of everything
     currentPage = NULL;
     modalTrack = NULL;
     timeControl = NULL;
-	addPage("Page One", true);
-//	if(isOnThread){
+	
+    ///twk: necessary??
+    ///addPage("Page One", true);
+
+    //	if(isOnThread){
 //		startThread();
 //	}
 
@@ -1094,9 +1163,15 @@ void ofxTimeline::setBPM(float bpm) {
     ticker->setBPM(bpm);
 }
 
+void ofxTimeline::setNewBPM(float bpm){
+    ticker->setBPM(bpm);
+    ticker->updateBPMPoints();
+}
+
 float ofxTimeline::getBPM() {
 	return ticker->getBPM();
 }
+
 
 bool ofxTimeline::toggleSnapToBPM(){
 	snapToBPM = !snapToBPM;
@@ -1191,7 +1266,7 @@ void ofxTimeline::mousePressed(ofMouseEventArgs& args){
 		}
 		timelineHasFocus = focus;
 		if(timelineHasFocus){
-			tabs->mousePressed(args);
+			if(showPageTabs) tabs->mousePressed(args);
 			inoutTrack->mousePressed(args);
 			ticker->mousePressed(args);
 			currentPage->mousePressed(args,millis);
@@ -1259,7 +1334,7 @@ void ofxTimeline::mouseReleased(ofMouseEventArgs& args){
     else{
 		inoutTrack->mouseReleased(args);
 		ticker->mouseReleased(args);
-		tabs->mouseReleased(args);
+		if(showPageTabs) tabs->mouseReleased(args);
 		currentPage->mouseReleased(args, millis);
 		zoomer->mouseReleased(args);
 	}
@@ -1516,6 +1591,7 @@ void ofxTimeline::checkEvents(){
 }
 
 void ofxTimeline::checkLoop(){
+    
 	if(currentTime < durationInSeconds*inoutRange.min){
         currentTime = durationInSeconds*inoutRange.min;
         playbackStartTime = timer.getAppTimeSeconds() - currentTime;
@@ -1523,6 +1599,7 @@ void ofxTimeline::checkLoop(){
     }
 
     if(currentTime >= durationInSeconds*inoutRange.max){
+        
         if(loopType == OF_LOOP_NONE){
             currentTime = durationInSeconds*inoutRange.max;
             stop();
@@ -1537,7 +1614,7 @@ void ofxTimeline::checkLoop(){
     }
 }
 
-void ofxTimeline::draw(){
+void ofxTimeline::draw(bool drawTickerMarks){
 
 	if(isSetup && isShowing){
 		ofPushStyle();
@@ -1555,16 +1632,21 @@ void ofxTimeline::draw(){
 		ofSetColor(255);
 
 		if (pages.size() > 1) {
-			tabs->draw();
+			if(showPageTabs)tabs->draw();
 		}
 
 		ofPushStyle();
-		currentPage->draw();
-		if(showZoomer)zoomer->_draw();
+        
+		currentPage->drawWhenNotDragging();//tweaked
+		
+        if(showZoomer)zoomer->_draw();
 
 		//draw these because they overlay the rest of the timeline with info
-        ticker->_draw();
-		inoutTrack->_draw();
+        //ticker->_draw();
+        ticker->draw(drawTickerMarks);
+		
+        inoutTrack->_draw();
+        
         ofPopStyle();
 
 		if(modalTrack != NULL){
@@ -1749,6 +1831,10 @@ ofxTLTrack* ofxTimeline::getTimecontrolTrack(){
 
 ofxTLZoomer* ofxTimeline::getZoomer(){
 	return zoomer;
+}
+
+ofxTLTicker* ofxTimeline::getTicker(){
+    return ticker;
 }
 
 //can be used to add custom elements
@@ -2090,6 +2176,7 @@ ofxTLAudioTrack* ofxTimeline::addAudioTrack(string trackName, string audioPath){
 ofxTLAudioTrack* ofxTimeline::getAudioTrack(string audioTrackName){
     return (ofxTLAudioTrack*)getTrack(audioTrackName);
 }
+
 
 ofxTLTrackHeader* ofxTimeline::getTrackHeader(string trackName){
     return getTrackHeader(getTrack(name));

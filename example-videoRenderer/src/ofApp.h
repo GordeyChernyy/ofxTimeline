@@ -10,6 +10,8 @@
 
 #include "ofMain.h"
 #include "ofxTimeline.h"
+#include "ofxTLAudioTrack.h"
+#include "ofxTLVideoTrack.h"
 
 class ofApp : public ofBaseApp{
 
